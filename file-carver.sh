@@ -18,6 +18,26 @@ carve_file() {
     tail -c +$((offset + 1)) "$FLASH_FILE" | head -c $size > "$output_file"
 }
 
+# Generic function to handle extraction based on regex
+generic_handler() {
+    local line=$1
+    local size_regex=$2
+    local filetype=$3
+
+    # Extract the offset from the line
+    offset=$(echo "$line" | awk '{print $1}')
+    
+    # Extract the size using the provided regex
+    size=$(echo "$line" | grep -oP "$size_regex")
+
+    if [[ -n "$size" ]]; then
+        output_file="$OUTPUT_DIR/${filetype}_${offset}"
+        carve_file "$offset" "$size" "$output_file"
+    else
+        echo "Failed to extract $filetype size from line: $line"
+    fi
+}
+
 # Map of descriptions to handler functions
 declare -A handlers=(
     ["CramFS filesystem"]="handle_cramfs"
@@ -25,65 +45,28 @@ declare -A handlers=(
     ["Squashfs filesystem"]="handle_squashfs"
     ["Linux EXT filesystem"]="handle_linuxext"
 )
-
 # Function to handle CramFS extraction
 handle_cramfs() {
     local line=$1
-
-    # Extract the offset and size from the line
-    offset=$(echo "$line" | awk '{print $1}')
-    size=$(echo "$line" | grep -oP '(?<=size: )\d+')
-
-    if [[ -n "$size" ]]; then
-        output_file="$OUTPUT_DIR/cramfs_${offset}.fs"
-        carve_file "$offset" "$size" "$output_file"
-    else
-        echo "Failed to extract CramFS size from line: $line"
-    fi
+    generic_handler "$line" '(?<=size: )\d+' "cramfs"
 }
 
 # Function to handle uImage extraction
 handle_uimage() {
     local line=$1
-
-    # Extract the offset and size from the line
-    offset=$(echo "$line" | awk '{print $1}')
-    size=$(echo "$line" | grep -oP '(?<=image size: )\d+')
-
-    if [[ -n "$size" ]]; then
-        output_file="$OUTPUT_DIR/uimage_${offset}.img"
-        carve_file "$offset" "$size" "$output_file"
-    else
-        echo "Failed to extract uImage size from line: $line"
-    fi
+    generic_handler "$line" '(?<=image size: )\d+' "uimage"
 }
 
-# Function to handle squashfs extraction
+# Function to handle SquashFS extraction
 handle_squashfs() {
     local line=$1
-    offset=$(echo "$line" | awk '{print $1}')
-    size=$(echo "$line" | grep -oP '(?<!blocksize: )(?<=size: )\d+')
-
-    if [[ -n "$size" ]]; then
-        output_file="$OUTPUT_DIR/squashfs_${offset}.fs"
-        carve_file "$offset" "$size" "$output_file"
-    else
-        echo "Failed to extract SquashFS size from line: $line"
-    fi
+    generic_handler "$line" '(?<!blocksize: )(?<=size: )\d+' "squashfs"
 }
 
-# Function to handle linux ext filesystem extraction
+# Function to handle Linux ext extraction
 handle_linuxext() {
     local line=$1
-    offset=$(echo "$line" | awk '{print $1}')
-    size=$(echo "$line" | grep -oP '(?<=image size: )\d+(?=,)')
-
-    if [[ -n "$size" ]]; then
-        output_file="$OUTPUT_DIR/linuxext_${offset}.ext"
-        carve_file "$offset" "$size" "$output_file"
-    else
-        echo "Failed to extract linux ext size from line: $line"
-    fi
+    generic_handler "$line" '(?<=image size: )\d+(?=,)' "linuxext"
 }
 
 # Read through the binwalk log and process each line
