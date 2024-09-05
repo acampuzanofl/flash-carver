@@ -8,6 +8,16 @@ FLASH_FILE="flash.bin"
 OUTPUT_DIR="./extracted_files"
 mkdir -p $OUTPUT_DIR
 
+# Function to carve out a file using tail and head
+carve_file() {
+    local offset=$1
+    local size=$2
+    local output_file=$3
+
+    echo "Carving file at offset $offset with size $size into $output_file"
+    tail -c +$((offset + 1)) "$FLASH_FILE" | head -c $size > "$output_file"
+}
+
 # Map of descriptions to handler functions
 declare -A handlers=(
     ["CramFS filesystem"]="handle_cramfs"
@@ -17,15 +27,14 @@ declare -A handlers=(
 # Function to handle CramFS extraction
 handle_cramfs() {
     local line=$1
-    
+
     # Extract the offset and size from the line
     offset=$(echo "$line" | awk '{print $1}')
     size=$(echo "$line" | grep -oP '(?<=size: )\d+')
 
     if [[ -n "$size" ]]; then
-        echo "Extracting CramFS at offset $offset with size $size..."
         output_file="$OUTPUT_DIR/cramfs_${offset}.fs"
-        dd if="$FLASH_FILE" of="$output_file" bs=1 skip="$offset" count="$size" status=none
+        carve_file "$offset" "$size" "$output_file"
     else
         echo "Failed to extract CramFS size from line: $line"
     fi
@@ -40,9 +49,8 @@ handle_uimage() {
     size=$(echo "$line" | grep -oP '(?<=image size: )\d+')
 
     if [[ -n "$size" ]]; then
-        echo "Extracting uImage at offset $offset with size $size..."
         output_file="$OUTPUT_DIR/uimage_${offset}.img"
-        dd if="$FLASH_FILE" of="$output_file" bs=1 skip="$offset" count="$size" status=none
+        carve_file "$offset" "$size" "$output_file"
     else
         echo "Failed to extract uImage size from line: $line"
     fi
