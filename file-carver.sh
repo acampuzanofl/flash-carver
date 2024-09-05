@@ -23,6 +23,7 @@ declare -A handlers=(
     ["CramFS filesystem"]="handle_cramfs"
     ["uImage header"]="handle_uimage"
     ["Squashfs filesystem"]="handle_squashfs"
+    ["Linux EXT filesystem"]="handle_linuxext"
 )
 
 # Function to handle CramFS extraction
@@ -61,13 +62,27 @@ handle_uimage() {
 handle_squashfs() {
     local line=$1
     offset=$(echo "$line" | awk '{print $1}')
-    size=$(echo "$line" | grep -oP '(?<=size: )\d+' | head -n 1)
+    size=$(echo "$line" | grep -oP '(?<!blocksize: )(?<=size: )\d+')
 
     if [[ -n "$size" ]]; then
         output_file="$OUTPUT_DIR/squashfs_${offset}.fs"
         carve_file "$offset" "$size" "$output_file"
     else
         echo "Failed to extract SquashFS size from line: $line"
+    fi
+}
+
+# Function to handle linux ext filesystem extraction
+handle_linuxext() {
+    local line=$1
+    offset=$(echo "$line" | awk '{print $1}')
+    size=$(echo "$line" | grep -oP '(?<=image size: )\d+(?=,)')
+
+    if [[ -n "$size" ]]; then
+        output_file="$OUTPUT_DIR/linuxext_${offset}.ext"
+        carve_file "$offset" "$size" "$output_file"
+    else
+        echo "Failed to extract linux ext size from line: $line"
     fi
 }
 
